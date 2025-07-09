@@ -1,7 +1,15 @@
 [
   {
-    "aws" : "docker-compose -f docker-compose.aws.yml up --build",
-    "local" : "docker-compose -f docker-compose.yml up --build"
+    "build and deploy (bash)" : "make",
+    "build" : "make build",
+    "push" : "make push",
+    "deploy" : "make deploy",
+    "clean" : "make clean",
+    "fix" : "created new ECRPublicAccessPolicy"
+  },
+  {
+    "aws" : "docker-compose -f docker-compose.aws.yaml up --build",
+    "local" : "docker-compose -f docker-compose.yaml up --build"
   },
   {
     "database": {

@@ -1,25 +1,18 @@
 FROM public.ecr.aws/lambda/nodejs:20
 
-# Install Chromium dependencies
-RUN yum install -y \
-    chromium-headless \
-    atk cups-libs gtk3 libxcomposite libXcursor libXdamage libXi \
-    libXtst pango alsa-lib libXrandr libXss libXScrnSaver libxshmfence \
-    nss && yum clean all
-
 # Set working directory
 WORKDIR /var/task
 
-# Copy files
+# Copy your project files
 COPY package*.json ./
 COPY . .
 
-# Install only core + AWS dependencies
+# Install dependencies (omit optional, e.g. Puppeteer binary)
 RUN npm install --omit=optional
 
-# Environment for puppeteer-core
+# Set Puppeteer environment
+ENV PUPPETEER_EXECUTABLE_PATH=/opt/chromium
 ENV AWS_EXECUTION_ENV=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# Run handler
+# Command for Lambda function entry point
 CMD ["index.fetch"]
