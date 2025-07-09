@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    volumes:
+      - .:/app
+    environment:
+      - AWS_EXECUTION_ENV=
+    command: ["node", "index.js"]

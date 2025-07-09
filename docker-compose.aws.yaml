@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.aws
+    environment:
+      - AWS_EXECUTION_ENV=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    volumes:
+      - .:/var/task
+    command: ["node", "index.js"]

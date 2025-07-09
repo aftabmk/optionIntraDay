@@ -2,7 +2,7 @@ const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
 const { convertCsvBufferToJson } = require('./csvToJson');
 const { delay, clearSession, waitForSelectorWithRetries } = require('./utils');
-require('dotenv').config();
+
 
 async function scrapeOptionChain() {
   const browser = await puppeteer.launch({
