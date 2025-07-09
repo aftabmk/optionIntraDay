@@ -5,8 +5,8 @@ const ddb = new AWS.DynamoDB({ region: "ap-south-1" });
 const { unmarshall } = AWS.DynamoDB.Converter;
 
 const TARGET_STRIKE = 25000;
-const START_TIME = "2025-06-27T09:30:00.000Z";   // 0930
-const END_TIME   = "2025-06-27T15:30:00.000Z";    // 1530
+const START_TIME = "2025-07-09T09:30:00.000Z";   // 0930
+const END_TIME   = "2025-07-09T15:30:00.000Z";    // 1530
 
 ddb.scan({ TableName: "optionIntraDay" }, (err, data) => {
   if (err) {

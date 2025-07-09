@@ -1,6 +1,15 @@
 const { delay } = require("./function/utils");
 const { storeInDynamoDB } = require("./function/dynamodb");
-const { scrapeOptionChain } = require("./function/scraper");
+
+let scrapeOptionChain;
+
+if (process.env.AWS_EXECUTION_ENV) {
+  // On AWS Lambda or other AWS environment
+  scrapeOptionChain = require("./function/scraper_aws").scrapeOptionChain;
+} else {
+  // Local environment
+  scrapeOptionChain = require("./function/scraper").scrapeOptionChain;
+}
 
 async function fetch() {
   let attempts = 3;
@@ -21,4 +30,4 @@ async function fetch() {
 }
 
 fetch();
-// module.exports = {fetch}; // for cron
+// module.exports = {fetch}; // for cron or testing
