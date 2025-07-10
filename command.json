@@ -1,15 +1,20 @@
 [
   {
     "login" : "docker login",
+    "build" : "docker build -t optionintraday-scraper .",
     "tag image" : "docker tag optionintraday-scraper kizhisery/optionintraday-scraper:latest",
     "push" : "docker push kizhisery/optionintraday-scraper:latest"
   },
   {
-    "database": {
       "install": "curl -O https://s3.us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip",
       "unzip": "unzip dynamodb_local_latest.zip",
       "initiate": "java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb"
-    }
+    },
+    {
+      "prefix" : "chmod 400 optionintraday.pem", 
+      "suffix" : "ssh -i optionintraday.pem ec2-user@13.232.181.60",
+      "warning" : "without prefix will show error",
+      "docker manual" : "docker run --rm --env-file /home/ec2-user/env.list kizhisery/optionintraday-scraper"
   },
   {
     "get": "node getData/getDynamo 25500"
@@ -31,3 +36,6 @@
     "check table" : "aws dynamodb list-tables --region ap-south-1"
   }
 ]
+
+chmod 400 optionintraday.pem 
+ssh -i optionintraday.pem ec2-user@13.232.181.60

@@ -1,5 +1,11 @@
-# Use official Node.js slim base image
 FROM node:18-slim
+
+# Set timezone to IST (Asia/Kolkata)
+RUN apt-get update && apt-get install -y tzdata && \
+    ln -sf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime && \
+    echo "Asia/Kolkata" > /etc/timezone && \
+    dpkg-reconfigure -f noninteractive tzdata && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install required dependencies for Chromium (Puppeteer)
 RUN apt-get update && apt-get install -y \
@@ -34,7 +40,7 @@ RUN apt-get update && apt-get install -y \
   --no-install-recommends && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
+# Set working directory
 WORKDIR /app
 
 # Copy package files and install Node.js dependencies
@@ -44,7 +50,7 @@ RUN npm install
 # Copy application source
 COPY . .
 
-# Expose app port (important for Render)
+# Expose app port
 EXPOSE 3000
 
 # Use environment port or default
