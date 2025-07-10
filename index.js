@@ -1,15 +1,6 @@
 const { delay } = require("./function/utils");
 const { storeInDynamoDB } = require("./function/dynamodb");
-
-let scrapeOptionChain;
-
-if (process.env.AWS_EXECUTION_ENV) {
-  // AWS Lambda environment
-  scrapeOptionChain = require("./function/scraper_aws").scrapeOptionChain;
-} else {
-  // Local development
-  scrapeOptionChain = require("./function/scraper").scrapeOptionChain;
-}
+const { scrapeOptionChain } = require("./function/scraper");
 
 async function fetch() {
   let attempts = 3;
@@ -33,11 +24,5 @@ async function fetch() {
     }
   }
 }
-
-// For Lambda entry point
-module.exports = { fetch };
-
 // Also call immediately if running standalone (e.g. local dev or Docker)
-if (require.main === module) {
-  fetch();
-}
+fetch();

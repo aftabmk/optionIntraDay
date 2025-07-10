@@ -4,7 +4,7 @@ services:
   scraper:
     build:
       context: .
-      dockerfile: Dockerfile.local
+      dockerfile: Dockerfile
     volumes:
       - .:/app
     environment:

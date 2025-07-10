@@ -1,15 +1,8 @@
 [
   {
-    "build and deploy (bash)" : "make",
-    "build" : "make build",
-    "push" : "make push",
-    "deploy" : "make deploy",
-    "clean" : "make clean",
-    "fix" : "created new ECRPublicAccessPolicy"
-  },
-  {
-    "aws" : "docker-compose -f docker-compose.aws.yaml up --build",
-    "local" : "docker-compose -f docker-compose.yaml up --build"
+    "login" : "docker login",
+    "tag image" : "docker tag optionintraday-scraper kizhisery/optionintraday-scraper:latest",
+    "push" : "docker push kizhisery/optionintraday-scraper:latest"
   },
   {
     "database": {
@@ -19,8 +12,7 @@
     }
   },
   {
-    "run cron" : "node cron",
-    "fetch": "node getJson"
+    "get": "node getData/getDynamo 25500"
   },
   {
     "install" : "npm install (if package and package-lock.json available)"
