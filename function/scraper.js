@@ -34,30 +34,35 @@ async function scrapeOptionChain() {
       timeout: 0,
     });
 
-    page.on("console", (msg) => {
-      console.log(`[BROWSER LOG]: ${msg.text()}`);
+    // 🖱️ Trigger the click that loads the table
+    console.log("🖱️ Clicking to load option chain table...");
+    await page.evaluate(() => {
+      const clickable = document.querySelector("#equity_underlyingVal");
+      if (clickable) {
+        clickable.click();
+        console.log("✅ Clicked #equity_underlyingVal to load table.");
+      } else {
+        console.warn("⚠️ #equity_underlyingVal not found.");
+      }
     });
 
+    // ⏳ Wait for the table to load
     try {
-      await page.waitForFunction(
-        () => {
-          const table = document.querySelector(
-            "#optionChainTable-indices tbody"
-          );
-          console.log("Checking table rows...");
-          return table && table.rows && table.rows.length > 1;
-        },
-        { timeout: 40000 }
-      );
+      await page.waitForFunction(() => {
+        const table = document.querySelector("#optionChainTable-indices tbody");
+        return table && table.rows && table.rows.length > 1;
+      }, { timeout: 15000 });
 
-      console.log("✅ Table loaded with rows.");
+      console.log("✅ Option chain table loaded.");
     } catch (err) {
-      console.error("❌ waitForFunction timed out:", err);
+      console.error("❌ Table did not load in time:", err);
       await page.screenshot({ path: "debug_table_timeout.png" });
+      throw err;
     }
 
     await waitForSelectorWithRetries(page, "#downloadOCTable");
-    console.log("🖱️ Clicking download...");
+
+    console.log("🖱️ Clicking download button...");
     await page.click("#downloadOCTable");
     await delay(2000);
 
@@ -66,13 +71,10 @@ async function scrapeOptionChain() {
       const valueText =
         document.querySelector("#equity_underlyingVal")?.textContent || "";
       const rawTimeText =
-        document.querySelector("#equity_timeStamp span:last-child")
-          ?.textContent || "";
+        document.querySelector("#equity_timeStamp span:last-child")?.textContent || "";
 
       const valueMatch = valueText.match(/([\d,]+\.\d+)/);
-      const numericValue = valueMatch
-        ? parseFloat(valueMatch[1].replace(/,/g, ""))
-        : null;
+      const numericValue = valueMatch ? parseFloat(valueMatch[1].replace(/,/g, "")) : null;
 
       const timeMatch = rawTimeText.match(/\b(\d{2}:\d{2})/);
       const timeStr = timeMatch ? timeMatch[1] : null;
