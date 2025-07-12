@@ -34,17 +34,23 @@ async function scrapeOptionChain() {
       timeout: 0,
     });
 
-    // 🖱️ Trigger the click that loads the table
-    console.log("🖱️ Clicking to load option chain table...");
-    await page.evaluate(() => {
+    // 🖱️ Try to click the element that loads the table
+    const clicked = await page.evaluate(() => {
       const clickable = document.querySelector("#equity_underlyingVal");
       if (clickable) {
         clickable.click();
         console.log("✅ Clicked #equity_underlyingVal to load table.");
+        return true;
       } else {
         console.warn("⚠️ #equity_underlyingVal not found.");
+        return false;
       }
     });
+
+    if (!clicked) {
+      console.warn("🔁 Element to load option chain table was not found. Returning early.");
+      return null;
+    }
 
     // ⏳ Wait for the table to load
     try {
@@ -57,7 +63,7 @@ async function scrapeOptionChain() {
     } catch (err) {
       console.error("❌ Table did not load in time:", err);
       await page.screenshot({ path: "debug_table_timeout.png" });
-      throw err;
+      return null;
     }
 
     await waitForSelectorWithRetries(page, "#downloadOCTable");

@@ -4,12 +4,16 @@ const { scrapeOptionChain } = require("./function/scraper");
 
 // Lambda-compatible handler function
 exports.handler = async (event) => {
-  let attempts = 3;
+  let attempts = 2;
 
   while (attempts--) {
     try {
       console.log("🚀 Starting scrape...");
       const finalOutput = await scrapeOptionChain();
+
+      if (!finalOutput) {
+        throw new Error("scrapeOptionChain returned null (no data)");
+      }
 
       console.log("✅ Scrape successful. Storing to DynamoDB...");
       await storeInDynamoDB(finalOutput);
