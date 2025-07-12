@@ -1,15 +1,16 @@
+const puppeteer = require("puppeteer-extra");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+puppeteer.use(StealthPlugin());
 const chromium = require("chrome-aws-lambda");
-const puppeteer = require("puppeteer-core");
 const { convertCsvBufferToJson } = require("./csvToJson");
-const { delay, clearSession, waitForSelectorWithRetries } = require("./utils");
+const { simulateHumanBehavior , clearSession, waitForSelectorWithRetries } = require("./utils");
 
 require("dotenv").config();
 
 async function scrapeOptionChain() {
   const browser = await puppeteer.launch({
-    args: chromium.args,
-    executablePath:
-      (await chromium.executablePath) || "/usr/bin/chromium-browser",
+    args: [...chromium.args, "--disable-web-security"], // Optional: disable CORS for testing
+    executablePath: await chromium.executablePath || "/usr/bin/chromium-browser",
     headless: chromium.headless,
     defaultViewport: { width: 1366, height: 768 },
   });
@@ -18,66 +19,59 @@ async function scrapeOptionChain() {
   await clearSession(page);
 
   await page.setUserAgent(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   );
+  await page.setDefaultTimeout(20000);
 
   try {
     console.log("🌐 Opening NSE homepage...");
-    await page.goto(process.env.MAIN_URL, {
-      waitUntil: "networkidle2",
-      timeout: 0,
-    });
+    await page.goto(process.env.MAIN_URL, { waitUntil: "networkidle2", timeout: 0 });
 
     console.log("📄 Navigating to Option Chain...");
-    await page.goto(process.env.SUB_URL, {
-      waitUntil: "networkidle2",
-      timeout: 0,
-    });
+    await Promise.all([
+      page.goto(process.env.SUB_URL, { waitUntil: "networkidle2", timeout: 0 }),
+      page.waitForSelector(".row.my-2", { timeout: 15000 }),
+    ]);
 
-    // 🖱️ Try to click the element that loads the table
-    const clicked = await page.evaluate(() => {
-      const clickable = document.querySelector("#equity_underlyingVal");
-      if (clickable) {
-        clickable.click();
-        console.log("✅ Clicked #equity_underlyingVal to load table.");
-        return true;
-      } else {
-        console.warn("⚠️ #equity_underlyingVal not found.");
-        return false;
-      }
-    });
+    console.log("🖱️ Simulating human behavior...");
+    await simulateHumanBehavior(page);
 
-    if (!clicked) {
-      console.warn("🔁 Element to load option chain table was not found. Returning early.");
+    const clickable = await page.$("#equity_underlyingVal");
+    if (!clickable) {
+      console.warn("⚠️ #equity_underlyingVal not found. Taking screenshot...");
+      await page.screenshot({ path: "debug_screenshot.png", fullPage: true });
       return null;
     }
 
-    // ⏳ Wait for the table to load
-    try {
-      await page.waitForFunction(() => {
-        const table = document.querySelector("#optionChainTable-indices tbody");
-        return table && table.rows && table.rows.length > 1;
-      }, { timeout: 15000 });
+    await clickable.click();
+    console.log("✅ Clicked #equity_underlyingVal to load table.");
 
-      console.log("✅ Option chain table loaded.");
-    } catch (err) {
-      console.error("❌ Table did not load in time:", err);
-      await page.screenshot({ path: "debug_table_timeout.png" });
-      return null;
+    await waitForSelectorWithRetries(page, "#optionChainTable-indices tbody tr:nth-child(2)", 3, 15000);
+    console.log("✅ Option chain table loaded.");
+
+    const rowCount = await page.evaluate(() => {
+      return document.querySelectorAll("#optionChainTable-indices tbody tr").length;
+    });
+    if (rowCount < 2) {
+      throw new Error("Table loaded but contains insufficient data.");
     }
 
     await waitForSelectorWithRetries(page, "#downloadOCTable");
 
     console.log("🖱️ Clicking download button...");
     await page.click("#downloadOCTable");
-    await delay(2000);
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector("#downloadOCTable");
+        return el && el.getAttribute("href")?.startsWith("data:application/csv;base64,");
+      },
+      { timeout: 10000 }
+    );
 
     const { dataUrl, underlyingValue, timestamp } = await page.evaluate(() => {
       const el = document.querySelector("#downloadOCTable");
-      const valueText =
-        document.querySelector("#equity_underlyingVal")?.textContent || "";
-      const rawTimeText =
-        document.querySelector("#equity_timeStamp span:last-child")?.textContent || "";
+      const valueText = document.querySelector("#equity_underlyingVal")?.textContent || "";
+      const rawTimeText = document.querySelector("#equity_timeStamp span:last-child")?.textContent || "";
 
       const valueMatch = valueText.match(/([\d,]+\.\d+)/);
       const numericValue = valueMatch ? parseFloat(valueMatch[1].replace(/,/g, "")) : null;
@@ -103,17 +97,34 @@ async function scrapeOptionChain() {
     });
 
     if (!dataUrl.startsWith("data:application/csv;base64,")) {
-      throw new Error("❌ Invalid CSV data URL.");
+      console.warn("⚠️ Invalid CSV data URL. Attempting to scrape table directly...");
+      const tableData = await page.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll("#optionChainTable-indices tbody tr"));
+        return rows.map(row => {
+          const cells = Array.from(row.querySelectorAll("td"));
+          return cells.map(cell => cell.textContent.trim());
+        });
+      });
+      if (tableData.length) {
+        console.log("✅ Scraped table data directly:", tableData);
+        return { timestamp, underlyingValue, data: tableData };
+      }
+      throw new Error("❌ Invalid CSV data URL and table scraping failed.");
     }
 
     const base64 = dataUrl.split(",")[1];
     const csvBuffer = Buffer.from(base64, "base64");
-
     const parsedData = convertCsvBufferToJson(csvBuffer);
-    if (!parsedData.length)
+
+    if (!parsedData.length) {
       throw new Error("❌ CSV content returned empty data.");
+    }
 
     return { timestamp, underlyingValue, data: parsedData };
+  } catch (error) {
+    console.error("❌ Error during scraping:", error);
+    await page.screenshot({ path: "error_screenshot.png", fullPage: true });
+    throw error;
   } finally {
     await browser.close();
   }
