@@ -1,132 +1,148 @@
-const puppeteer = require("puppeteer-extra");
-const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-puppeteer.use(StealthPlugin());
 const chromium = require("chrome-aws-lambda");
+const puppeteer = require("puppeteer-core");
 const { convertCsvBufferToJson } = require("./csvToJson");
-const { simulateHumanBehavior , clearSession, waitForSelectorWithRetries } = require("./utils");
+const { delay, clearSession, waitForSelectorWithRetries } = require("./utils");
 
 require("dotenv").config();
 
 async function scrapeOptionChain() {
+  console.log("🚀 Starting scrape...");
+  console.log("🚀 Preparing to launch Chromium...");
+
+  const execPath = await chromium.executablePath;
+  if (!execPath) {
+    throw new Error("❌ Chromium executable path not found.");
+  }
+
+  console.log("🔧 Chromium exec path:", execPath);
+  console.log("🧪 Launching browser...");
+
   const browser = await puppeteer.launch({
-    args: [...chromium.args, "--disable-web-security"], // Optional: disable CORS for testing
-    executablePath: await chromium.executablePath || "/usr/bin/chromium-browser",
+    args: chromium.args,
+    executablePath: execPath,
     headless: chromium.headless,
     defaultViewport: { width: 1366, height: 768 },
+    ignoreHTTPSErrors: true,
+    timeout: 30000,
   });
 
+  console.log("✅ Browser launched.");
   const page = await browser.newPage();
+
   await clearSession(page);
+  console.log("✅ Session cleared.");
 
   await page.setUserAgent(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114 Safari/537.36"
   );
-  await page.setDefaultTimeout(20000);
 
   try {
-    console.log("🌐 Opening NSE homepage...");
-    await page.goto(process.env.MAIN_URL, { waitUntil: "networkidle2", timeout: 0 });
+    const startTime = Date.now();
 
-    console.log("📄 Navigating to Option Chain...");
-    await Promise.all([
-      page.goto(process.env.SUB_URL, { waitUntil: "networkidle2", timeout: 0 }),
-      page.waitForSelector(".row.my-2", { timeout: 15000 }),
-    ]);
+    console.log("🌐 Navigating to MAIN_URL...");
+    await page.goto(process.env.MAIN_URL, { waitUntil: "networkidle2", timeout: 20000 });
+    console.log("✅ MAIN_URL loaded in", Date.now() - startTime, "ms");
 
-    console.log("🖱️ Simulating human behavior...");
-    await simulateHumanBehavior(page);
+    console.log("📄 Navigating to SUB_URL...");
+    await page.goto(process.env.SUB_URL, { waitUntil: "networkidle2", timeout: 20000 });
+    console.log("✅ SUB_URL loaded in", Date.now() - startTime, "ms");
 
-    const clickable = await page.$("#equity_underlyingVal");
-    if (!clickable) {
-      console.warn("⚠️ #equity_underlyingVal not found. Taking screenshot...");
-      await page.screenshot({ path: "debug_screenshot.png", fullPage: true });
+    console.log("⏳ Waiting for .row.my-2...");
+    await page.waitForSelector(".row.my-2", { timeout: 10000 });
+    console.log("✅ Found .row.my-2");
+
+    console.log("🖱️ Clicking #equity_underlyingVal...");
+    const clicked = await page.evaluate(() => {
+      const el = document.querySelector("#equity_underlyingVal");
+      if (el) {
+        el.click();
+        return true;
+      }
+      return false;
+    });
+
+    if (!clicked) {
+      console.warn("❌ Click failed: #equity_underlyingVal not found or not clickable.");
       return null;
     }
 
-    await clickable.click();
-    console.log("✅ Clicked #equity_underlyingVal to load table.");
+    console.log("⏳ Waiting for option chain table...");
+    await page.waitForFunction(() => {
+      const table = document.querySelector("#optionChainTable-indices tbody");
+      return table && table.rows.length > 1;
+    }, { timeout: 15000 });
+    console.log("✅ Option chain table is visible.");
 
-    await waitForSelectorWithRetries(page, "#optionChainTable-indices tbody tr:nth-child(2)", 3, 15000);
-    console.log("✅ Option chain table loaded.");
-
-    const rowCount = await page.evaluate(() => {
-      return document.querySelectorAll("#optionChainTable-indices tbody tr").length;
-    });
-    if (rowCount < 2) {
-      throw new Error("Table loaded but contains insufficient data.");
-    }
-
+    console.log("🔍 Waiting for download button...");
     await waitForSelectorWithRetries(page, "#downloadOCTable");
+    console.log("✅ Found download button.");
 
     console.log("🖱️ Clicking download button...");
     await page.click("#downloadOCTable");
-    await page.waitForFunction(
-      () => {
+    await delay(2000);
+
+    console.log("📦 Extracting metadata and base64 CSV...");
+    const result = await page.evaluate(() => {
+      try {
         const el = document.querySelector("#downloadOCTable");
-        return el && el.getAttribute("href")?.startsWith("data:application/csv;base64,");
-      },
-      { timeout: 10000 }
-    );
+        const valueText = document.querySelector("#equity_underlyingVal")?.textContent || "";
+        const rawTimeText = document.querySelector("#equity_timeStamp span:last-child")?.textContent || "";
 
-    const { dataUrl, underlyingValue, timestamp } = await page.evaluate(() => {
-      const el = document.querySelector("#downloadOCTable");
-      const valueText = document.querySelector("#equity_underlyingVal")?.textContent || "";
-      const rawTimeText = document.querySelector("#equity_timeStamp span:last-child")?.textContent || "";
+        const valueMatch = valueText.match(/([\d,]+\.\d+)/);
+        const numericValue = valueMatch ? parseFloat(valueMatch[1].replace(/,/g, "")) : null;
 
-      const valueMatch = valueText.match(/([\d,]+\.\d+)/);
-      const numericValue = valueMatch ? parseFloat(valueMatch[1].replace(/,/g, "")) : null;
+        const timeMatch = rawTimeText.match(/\b(\d{2}:\d{2})/);
+        const timeStr = timeMatch ? timeMatch[1] : null;
 
-      const timeMatch = rawTimeText.match(/\b(\d{2}:\d{2})/);
-      const timeStr = timeMatch ? timeMatch[1] : null;
+        const dateMatch = rawTimeText.match(/(\d{1,2}-[A-Za-z]{3}-\d{4})/);
+        const dateStr = dateMatch ? dateMatch[1] : null;
 
-      const dateMatch = rawTimeText.match(/(\d{1,2}-[A-Za-z]{3}-\d{4})/);
-      const dateStr = dateMatch ? dateMatch[1] : null;
+        let awsTimestamp = null;
+        if (dateStr && timeStr) {
+          const combined = `${dateStr} ${timeStr}`;
+          const parsedDate = new Date(combined + " UTC");
+          awsTimestamp = parsedDate.toISOString();
+        }
 
-      let awsTimestamp = null;
-      if (dateStr && timeStr) {
-        const combined = `${dateStr} ${timeStr}`;
-        const parsedDate = new Date(combined + " UTC");
-        awsTimestamp = parsedDate.toISOString();
+        return {
+          dataUrl: el?.getAttribute("href") || "",
+          underlyingValue: numericValue,
+          timestamp: awsTimestamp,
+        };
+      } catch (err) {
+        console.error("❌ Error extracting CSV metadata:", err.message);
+        return {};
       }
-
-      return {
-        dataUrl: el?.getAttribute("href") || "",
-        underlyingValue: numericValue,
-        timestamp: awsTimestamp,
-      };
     });
 
-    if (!dataUrl.startsWith("data:application/csv;base64,")) {
-      console.warn("⚠️ Invalid CSV data URL. Attempting to scrape table directly...");
-      const tableData = await page.evaluate(() => {
-        const rows = Array.from(document.querySelectorAll("#optionChainTable-indices tbody tr"));
-        return rows.map(row => {
-          const cells = Array.from(row.querySelectorAll("td"));
-          return cells.map(cell => cell.textContent.trim());
-        });
-      });
-      if (tableData.length) {
-        console.log("✅ Scraped table data directly:", tableData);
-        return { timestamp, underlyingValue, data: tableData };
-      }
-      throw new Error("❌ Invalid CSV data URL and table scraping failed.");
+    console.log("📦 Metadata extracted:", result);
+
+    const { dataUrl, underlyingValue, timestamp } = result;
+
+    if (!dataUrl || !dataUrl.startsWith("data:application/csv;base64,")) {
+      throw new Error("❌ Invalid CSV data URL.");
     }
 
+    console.log("🧮 Decoding CSV...");
     const base64 = dataUrl.split(",")[1];
     const csvBuffer = Buffer.from(base64, "base64");
-    const parsedData = convertCsvBufferToJson(csvBuffer);
 
+    console.log("🔄 Converting CSV to JSON...");
+    const parsedData = convertCsvBufferToJson(csvBuffer);
     if (!parsedData.length) {
       throw new Error("❌ CSV content returned empty data.");
     }
 
+    console.log("✅ Data scraping complete.");
     return { timestamp, underlyingValue, data: parsedData };
-  } catch (error) {
-    console.error("❌ Error during scraping:", error);
-    await page.screenshot({ path: "error_screenshot.png", fullPage: true });
-    throw error;
+
+  } catch (err) {
+    console.error("❌ Scrape failed:", err.message);
+    await page.screenshot({ path: "/tmp/scrape_error.png" });
+    throw err;
   } finally {
     await browser.close();
+    console.log("🔚 Browser closed.");
   }
 }
 

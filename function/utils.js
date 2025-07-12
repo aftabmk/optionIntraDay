@@ -4,13 +4,29 @@ async function delay(ms) {
 }
 
 async function clearSession(page) {
-  // Your existing clearSession implementation
-  await page.evaluate(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-  });
-  await page.deleteCookie(...(await page.cookies()));
+  try {
+    await page.evaluate(() => {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (err) {
+        console.warn("⚠️ localStorage/sessionStorage not accessible:", err.message);
+      }
+    });
+  } catch (err) {
+    console.warn("⚠️ Failed to clear browser storage:", err.message);
+  }
+
+  try {
+    const cookies = await page.cookies();
+    if (cookies.length > 0) {
+      await page.deleteCookie(...cookies);
+    }
+  } catch (err) {
+    console.warn("⚠️ Could not clear cookies:", err.message);
+  }
 }
+
 
 async function waitForSelectorWithRetries(
   page,
@@ -33,31 +49,6 @@ async function waitForSelectorWithRetries(
         );
       await delay(2000);
     }
-  }
-}
-
-async function simulateHumanBehavior(page) {
-  try {
-    // Simulate random scrolling
-    await page.evaluate(() => {
-      const randomScroll = Math.random() * 100 + 100; // Scroll 100-200 pixels
-      window.scrollBy(0, randomScroll);
-    });
-
-    // Simulate random mouse movement
-    await page.mouse.move(
-      Math.random() * 500, // X-coordinate (0-500 pixels)
-      Math.random() * 500, // Y-coordinate (0-500 pixels)
-      { steps: 10 } // Smooth movement with 10 steps
-    );
-
-    // Add a random delay to mimic human pauses
-    await delay(Math.random() * 1000 + 500); // 500-1500ms delay
-
-    console.log("🖱️ Simulated human behavior (scroll and mouse movement)");
-  } catch (error) {
-    console.error("❌ Error in simulateHumanBehavior:", error);
-    throw error;
   }
 }
 
@@ -92,7 +83,6 @@ module.exports = {
   delay,
   clearSession,
   waitForSelectorWithRetries,
-  simulateHumanBehavior,
   isWithinTimeRange,
   getNextRunTime,
 };
