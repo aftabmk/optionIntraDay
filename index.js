@@ -2,27 +2,36 @@ const { delay } = require("./function/utils");
 const { storeInDynamoDB } = require("./function/dynamodb");
 const { scrapeOptionChain } = require("./function/scraper");
 
-async function fetch() {
+// Lambda-compatible handler function
+exports.handler = async (event) => {
   let attempts = 3;
 
   while (attempts--) {
     try {
       console.log("🚀 Starting scrape...");
       const finalOutput = await scrapeOptionChain();
+
       console.log("✅ Scrape successful. Storing to DynamoDB...");
       await storeInDynamoDB(finalOutput);
+
       console.log("📦 Stored successfully.");
-      break;
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Success", data: finalOutput }),
+      };
     } catch (err) {
       console.error(`🚨 Error: ${err.message}`);
+
       if (attempts === 0) {
-        console.error("❌ All retries failed. Exiting.");
-        process.exit(1);
+        console.error("❌ All retries failed");
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ error: "Scraping failed", detail: err.message }),
+        };
       }
+
       console.log("🔁 Retrying in 5 seconds...");
       await delay(5000);
     }
   }
-}
-// Also call immediately if running standalone (e.g. local dev or Docker)
-fetch();
+};

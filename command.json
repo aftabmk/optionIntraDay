@@ -1,41 +1,24 @@
 [
   {
+    "prefix" : "chmod 400 optionintraday.pem", 
+    "suffix" : "ssh -i optionintraday.pem ec2-user@3.109.155.24",
+    "warning" : "without prefix will show error"
+  },
+  {
     "login" : "docker login",
-    "build" : "docker build -t optionintraday-scraper .",
-    "tag image" : "docker tag optionintraday-scraper kizhisery/optionintraday-scraper:latest",
-    "push" : "docker push kizhisery/optionintraday-scraper:latest"
+    "build" : "docker build -t scraper .",
+    "tag image" : "docker tag scraper kizhisery/optionintraday-scraper:latest",
+    "push" : "docker push kizhisery/optionintraday-scraper:latest",
+    "ec2 update" : "docker pull kizhisery/optionintraday-scraper:latest",
+    "ec2 run" : "docker run --rm kizhisery/optionintraday-scraper:latest",
+    "docker run" : "docker run --rm --env-file /home/ec2-user/env.list kizhisery/optionintraday-scraper"
   },
   {
-      "install": "curl -O https://s3.us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip",
-      "unzip": "unzip dynamodb_local_latest.zip",
-      "initiate": "java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb"
-    },
-    {
-      "prefix" : "chmod 400 optionintraday.pem", 
-      "suffix" : "ssh -i optionintraday.pem ec2-user@13.232.181.60",
-      "warning" : "without prefix will show error",
-      "docker manual" : "docker run --rm --env-file /home/ec2-user/env.list kizhisery/optionintraday-scraper"
-  },
-  {
-    "get": "node getData/getDynamo 25500"
-  },
-  {
-    "install" : "npm install (if package and package-lock.json available)"
-  },
-  {
-    "clone" :"git clone https://github.com/aftabmk/optionScraper.git"
-  },
-  {
-    "linux dependency" : "sudo apt-get update sudo apt-get install libatk1.0-0 libatk-bridge2.0-0 libcups2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64"
-  },
-  {
-    "configure" : "aws configure",
-    "check" : "aws sts get-caller-identity",
-    "permission" : "AmazonDynamoDBFullAccess",
-    "create table" : "node createTable",
-    "check table" : "aws dynamodb list-tables --region ap-south-1"
+    "create nano" : "nano /home/ec2-user/env.list (then add env no space)",
+    "keys" : "Ctrl O + Enter Ctrl + X",
+    "verify" : "cat /home/ec2-user/env.list"
   }
 ]
 
-chmod 400 optionintraday.pem 
-ssh -i optionintraday.pem ec2-user@13.232.181.60
+  // chmod 400 optionintraday.pem
+  // ssh -i optionintraday.pem ec2-user@3.109.155.24

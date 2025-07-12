@@ -1,15 +1,16 @@
-const puppeteer = require("puppeteer-extra");
-const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+const chromium = require("chrome-aws-lambda");
+const puppeteer = require("puppeteer-core");
 const { convertCsvBufferToJson } = require("./csvToJson");
 const { delay, clearSession, waitForSelectorWithRetries } = require("./utils");
 
-require('dotenv').config();
-puppeteer.use(StealthPlugin());
+require("dotenv").config();
 
 async function scrapeOptionChain() {
   const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: chromium.args,
+    executablePath:
+      (await chromium.executablePath) || "/usr/bin/chromium-browser",
+    headless: chromium.headless,
     defaultViewport: { width: 1366, height: 768 },
   });
 
@@ -33,10 +34,27 @@ async function scrapeOptionChain() {
       timeout: 0,
     });
 
-    await page.waitForFunction(() => {
-      const table = document.querySelector("#optionChainTable-indices tbody");
-      return table && table.rows.length > 1;
-    }, { timeout: 20000 });
+    page.on("console", (msg) => {
+      console.log(`[BROWSER LOG]: ${msg.text()}`);
+    });
+
+    try {
+      await page.waitForFunction(
+        () => {
+          const table = document.querySelector(
+            "#optionChainTable-indices tbody"
+          );
+          console.log("Checking table rows...");
+          return table && table.rows && table.rows.length > 1;
+        },
+        { timeout: 40000 }
+      );
+
+      console.log("✅ Table loaded with rows.");
+    } catch (err) {
+      console.error("❌ waitForFunction timed out:", err);
+      await page.screenshot({ path: "debug_table_timeout.png" });
+    }
 
     await waitForSelectorWithRetries(page, "#downloadOCTable");
     console.log("🖱️ Clicking download...");
@@ -51,32 +69,28 @@ async function scrapeOptionChain() {
         document.querySelector("#equity_timeStamp span:last-child")
           ?.textContent || "";
 
-      // Extract numeric value
       const valueMatch = valueText.match(/([\d,]+\.\d+)/);
       const numericValue = valueMatch
         ? parseFloat(valueMatch[1].replace(/,/g, ""))
         : null;
 
-      // Extract time
       const timeMatch = rawTimeText.match(/\b(\d{2}:\d{2})/);
       const timeStr = timeMatch ? timeMatch[1] : null;
 
-      // Extract date (e.g., "27-Jun-2025")
       const dateMatch = rawTimeText.match(/(\d{1,2}-[A-Za-z]{3}-\d{4})/);
       const dateStr = dateMatch ? dateMatch[1] : null;
 
-      // Combine to ISO timestamp
       let awsTimestamp = null;
       if (dateStr && timeStr) {
-        const combined = `${dateStr} ${timeStr}`; // e.g. "27-Jun-2025 09:15"
-        const parsedDate = new Date(combined + " UTC"); // UTC recommended
-        awsTimestamp = parsedDate.toISOString(); // "2025-06-27T09:15:00.000Z"
+        const combined = `${dateStr} ${timeStr}`;
+        const parsedDate = new Date(combined + " UTC");
+        awsTimestamp = parsedDate.toISOString();
       }
 
       return {
         dataUrl: el?.getAttribute("href") || "",
         underlyingValue: numericValue,
-        timestamp: awsTimestamp, // full AWS timestamp
+        timestamp: awsTimestamp,
       };
     });
 
@@ -88,7 +102,8 @@ async function scrapeOptionChain() {
     const csvBuffer = Buffer.from(base64, "base64");
 
     const parsedData = convertCsvBufferToJson(csvBuffer);
-    if (!parsedData.length) throw new Error("❌ CSV content returned empty data.");
+    if (!parsedData.length)
+      throw new Error("❌ CSV content returned empty data.");
 
     return { timestamp, underlyingValue, data: parsedData };
   } finally {

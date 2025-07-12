@@ -1,0 +1,31 @@
+{
+  "lambda_local": {
+    "docker_build": {
+      "command": "docker build -t scraper .",
+      "description": "Builds the Docker image using the current directory's Dockerfile",
+      "context": "./",
+      "tag": "scraper"
+    },
+    "docker_run": {
+      "command": "docker run --env-file .env -p 9000:8080 scraper",
+      "description": "Runs the Lambda container and maps internal port 8080 to localhost:9000",
+      "ports": {
+        "host": 9000,
+        "container": 8080
+      },
+      "image": "scraper"
+    },
+    "lambda_invoke": {
+      "command": "curl -X POST http://localhost:9000/2015-03-31/functions/function/invocations -d \"{}\" -H \"Content-Type: application/json\"",
+      "description": "Invokes the Lambda function running locally with empty JSON event",
+      "http": {
+        "method": "POST",
+        "url": "http://localhost:9000/2015-03-31/functions/function/invocations",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {}
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+    "system" : "docker system prune",
+    "images" : "docker image prune",
+    "container": "docker container prune",
+    "builder" : "docker builder prune"
+}
