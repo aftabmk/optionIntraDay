@@ -9,6 +9,9 @@
     "docker_run": {
       "command": "docker run --env-file .env -p 9000:8080 scraper",
       "description": "Runs the Lambda container and maps internal port 8080 to localhost:9000",
+      "description-256 ❌": "$ docker run --env-file .env -p 9000:8080 --memory=256m --cpus="0.13" scraper",
+      "description-512" ❌: "$ docker run --env-file .env -p 9000:8080 --memory=512m --cpus="0.25" scraper",
+      "description-1024" ✅ : "$ docker run --env-file .env -p 9000:8080 --memory=1024m --cpus="0.5" scraper",
       "ports": {
         "host": 9000,
         "container": 8080

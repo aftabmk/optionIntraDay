@@ -3,10 +3,20 @@ require("dotenv").config();
 const AWS = require("aws-sdk");
 const ddb = new AWS.DynamoDB({ region: "ap-south-1" });
 const { unmarshall } = AWS.DynamoDB.Converter;
+const { splitInChunks } = require("./utils");
 
-const TARGET_STRIKE = 25000;
-const START_TIME = "2025-07-09T09:30:00.000Z";   // 0930
-const END_TIME   = "2025-07-09T15:30:00.000Z";    // 1530
+// 
+let input = process.argv;
+// node getData/getDynamo 25000 250701 250711
+// Dates
+const prevDateChunks = splitInChunks(input[3]);
+const currDateChunks = splitInChunks(input[4]);
+
+const TARGET_STRIKE = parseInt(input[2] || 25000, 10);
+
+// Create ISO date strings
+const START_TIME = new Date(`20${prevDateChunks[0]}-${prevDateChunks[1]}-${prevDateChunks[2]}T09:30:00.000Z`);
+const END_TIME   = new Date(`20${currDateChunks[0]}-${currDateChunks[1]}-${currDateChunks[2]}T15:30:00.000Z`);
 
 ddb.scan({ TableName: "optionIntraDay" }, (err, data) => {
   if (err) {
@@ -16,16 +26,14 @@ ddb.scan({ TableName: "optionIntraDay" }, (err, data) => {
     const peResults = [];
     let lastAvailableTime = null;
 
-    // 🔄 Convert all items using unmarshall
     const cleanItems = data.Items.map(item => unmarshall(item));
 
     for (const item of cleanItems) {
-      if (item.strike !== TARGET_STRIKE) continue;
-
+      if (parseInt(item.strike, 10) !== TARGET_STRIKE) continue;
       if (!item.timestamp) continue;
-      const timeStr = item.timestamp.replace(":", "");
-      const timeNum = parseInt(timeStr, 10);
-      if (timeNum < START_TIME || timeNum > END_TIME) continue;
+
+      const itemTime = new Date(item.timestamp);
+      if (itemTime < START_TIME || itemTime > END_TIME) continue;
 
       const { timestamp: time, underlyingValue, strike, call, put } = item;
       lastAvailableTime = time;
@@ -63,8 +71,8 @@ ddb.scan({ TableName: "optionIntraDay" }, (err, data) => {
 
     // ✅ Output
     console.log(`✅ Strike Price: ${TARGET_STRIKE}`);
-    console.log(`⏱️ Time Range: ${START_TIME} to ${END_TIME}`);
-    console.log("✅ Last available time:", lastAvailableTime);
+    console.log(`⏱️ Time Range: ${START_TIME.toISOString()} to ${END_TIME.toISOString()}`);
+    console.log("✅ Last available time:", lastAvailableTime || "None");
 
     console.log("\n📘 CE Results:");
     console.table(ceResults);

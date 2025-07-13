@@ -1,4 +1,3 @@
-const chromium = require("chrome-aws-lambda");
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 
@@ -7,36 +6,32 @@ const { delay, clearSession, waitForSelectorWithRetries } = require("./utils");
 
 require("dotenv").config();
 
+// Use stealth plugin
 puppeteer.use(StealthPlugin());
 
 async function scrapeOptionChain() {
   console.log("🚀 Starting scrape...");
+  console.log("🧪 Launching browser...");
 
-  let browser = null;
+  const browser = await puppeteer.launch({
+    headless: "new", // Use "new" to avoid deprecation warning (Puppeteer 20+)
+    defaultViewport: { width: 1366, height: 768 },
+    ignoreHTTPSErrors: true,
+    timeout: 30000,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
+  console.log("✅ Browser launched.");
+  const page = await browser.newPage();
+
+  await clearSession(page);
+  console.log("✅ Session cleared.");
+
+  await page.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114 Safari/537.36"
+  );
 
   try {
-    const executablePath = process.env.AWS_EXECUTION_ENV
-      ? await chromium.executablePath // AWS Lambda
-      : undefined; // local fallback to puppeteer's Chromium
-
-    browser = await puppeteer.launch({
-      headless: true,
-      args: chromium.args,
-      executablePath,
-      ignoreHTTPSErrors: true,
-      defaultViewport: { width: 1366, height: 768 },
-    });
-
-    console.log("✅ Browser launched.");
-    const page = await browser.newPage();
-
-    await clearSession(page);
-    console.log("✅ Session cleared.");
-
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114 Safari/537.36"
-    );
-
     const startTime = Date.now();
 
     console.log("🌐 Navigating to MAIN_URL...");
@@ -49,6 +44,7 @@ async function scrapeOptionChain() {
 
     console.log("⏳ Waiting for .row.my-2...");
     await page.waitForSelector(".row.my-2", { timeout: 10000 });
+    console.log("✅ Found .row.my-2");
 
     console.log("🖱️ Clicking #equity_underlyingVal...");
     const clicked = await page.evaluate(() => {
@@ -70,9 +66,11 @@ async function scrapeOptionChain() {
       const table = document.querySelector("#optionChainTable-indices tbody");
       return table && table.rows.length > 1;
     }, { timeout: 15000 });
+    console.log("✅ Option chain table is visible.");
 
     console.log("🔍 Waiting for download button...");
     await waitForSelectorWithRetries(page, "#downloadOCTable");
+    console.log("✅ Found download button.");
 
     console.log("🖱️ Clicking download button...");
     await page.click("#downloadOCTable");
@@ -120,6 +118,7 @@ async function scrapeOptionChain() {
       throw new Error("❌ Invalid CSV data URL.");
     }
 
+    console.log("🧮 Decoding CSV...");
     const base64 = dataUrl.split(",")[1];
     const csvBuffer = Buffer.from(base64, "base64");
 
@@ -136,10 +135,8 @@ async function scrapeOptionChain() {
     console.error("❌ Scrape failed:", err.message);
     throw err;
   } finally {
-    if (browser) {
-      await browser.close();
-      console.log("🔚 Browser closed.");
-    }
+    await browser.close();
+    console.log("🔚 Browser closed.");
   }
 }
 
