@@ -43,11 +43,6 @@ async function fullScan(params = {}, items = []) {
 
       const itemTime = new Date(item.timestamp);
 
-      // Debugging: print all records inside time range even if strike is wrong
-      // if (itemTime >= START_TIME && itemTime <= END_TIME) {
-      //   console.log(`📌 Record: ${item.timestamp} | Strike: ${item.strike}`);
-      // }
-
       // Skip items not within time range
       if (itemTime < START_TIME || itemTime > END_TIME) {
         continue;
