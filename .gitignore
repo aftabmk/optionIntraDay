@@ -1,6 +1,6 @@
 # Node.js dependencies
 node_modules/
-
+data/
 # Optional logs
 logs/
 *.log
@@ -10,11 +10,6 @@ yarn-error.log*
 
 # Puppeteer Chromium cache
 .chromium/
-
-# Output directory
-DynamoDBLocal_lib/
-dailyOption/
-cron/
 
 # dotenv environment files
 .env
@@ -28,20 +23,4 @@ cron/
 .vscode/
 
 # Operating system files
-Thumbs.db
-shared-local-instance.db
-
-dynamodb-local-metadata.json
-
-DynamoDBLocal.jar
-
-
-README.txt
-LICENSE.txt
-THIRD-PARTY-LICENSES.txt
-
-
-optionintraday.pem
-
-
 ecs.json
