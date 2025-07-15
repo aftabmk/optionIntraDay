@@ -12,15 +12,16 @@ const { splitInChunks } = require("./utils");
 let input = process.argv;
 // Usage: node getData/getDynamo 250715
 const currDateChunks = splitInChunks(input[2]);
-const prevDateChunks = currDateChunks; // same for both
 
-// Create date range: 09:10 AM to 03:40 PM IST (in UTC)
-const START_TIME = new Date(
-  `20${prevDateChunks[0]}-${prevDateChunks[1]}-${prevDateChunks[2]}T09:10:00.000Z`
-);
-const END_TIME = new Date(
-  `20${currDateChunks[0]}-${currDateChunks[1]}-${currDateChunks[2]}T15:40:00.000Z`
-);
+// Convert to full date parts
+const [yy, mm, dd] = currDateChunks;
+const year = 2000 + parseInt(yy);
+const month = parseInt(mm) - 1; // JS months are 0-based
+const day = parseInt(dd);
+
+// Create IST time range: 09:10 to 15:40 IST, converted to UTC automatically
+const START_TIME = new Date(year, month, day, 9, 10);  // Local time
+const END_TIME = new Date(year, month, day, 15, 40);   // Local time
 
 // Recursive scan to fetch all items
 async function fullScan(params = {}, items = []) {
@@ -113,7 +114,7 @@ async function fullScan(params = {}, items = []) {
 
     // Log summary
     console.log(
-      `⏱️ Time Range: ${START_TIME.toISOString()} to ${END_TIME.toISOString()}`
+      `⏱️ Time Range: ${START_TIME} to ${END_TIME}`
     );
     console.log("✅ Last available time:", lastAvailableTime || "None");
     console.log(`💾 Saved successfully at: data/${fileName}`);
