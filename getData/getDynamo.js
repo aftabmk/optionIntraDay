@@ -4,7 +4,7 @@ const AWS = require("aws-sdk");
 const fs = require("fs");
 const path = require("path");
 
-const ddb = new AWS.DynamoDB({ region: "ap-south-1" });
+const ddb = new AWS.DynamoDB({ region: process.env.AWS_REGION || "us-east-1" });
 const { unmarshall } = AWS.DynamoDB.Converter;
 const { splitInChunks } = require("./utils");
 
